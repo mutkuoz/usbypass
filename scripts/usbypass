@@ -1,3 +1,10 @@
 #!/bin/sh
-# USBYPASS CLI shim. Installed to /usr/local/bin/usbypass by install.sh.
-exec /usr/bin/env python3 -m usbypass "$@"
+# USBYPASS CLI shim. Installed to /usr/local/bin/usbypass by install.sh
+# (or to /usr/bin/usbypass by the .deb / .rpm / Arch packages).
+#
+# We prepend /opt/usbypass to PYTHONPATH so the install.sh layout
+# (where the package lives at /opt/usbypass/usbypass/) is found
+# without depending on a .pth file. For distro-package installs the
+# directory does not exist and Python silently ignores it; the
+# package is found via the standard system site-packages instead.
+PYTHONPATH=/opt/usbypass${PYTHONPATH:+:$PYTHONPATH} exec /usr/bin/env python3 -m usbypass "$@"

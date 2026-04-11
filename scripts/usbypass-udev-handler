@@ -5,4 +5,9 @@
 #
 # udev kills children that run too long. The Python handler enforces
 # its own short timeout on mount waiting; this shim just forwards.
-exec /usr/bin/env python3 -m usbypass handle-udev "$@"
+#
+# PYTHONPATH=/opt/usbypass lets install.sh layouts (where the package
+# lives at /opt/usbypass) work without a .pth file. Distro-package
+# installs ignore the missing directory and find the package in the
+# normal system site-packages.
+PYTHONPATH=/opt/usbypass${PYTHONPATH:+:$PYTHONPATH} exec /usr/bin/env python3 -m usbypass handle-udev "$@"

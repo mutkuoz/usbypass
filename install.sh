@@ -88,13 +88,22 @@ cp -a "${SCRIPT_DIR}/src/usbypass" "${PREFIX}/usbypass"
 find "${PREFIX}/usbypass" -type d -exec chmod 0755 {} \;
 find "${PREFIX}/usbypass" -type f -exec chmod 0644 {} \;
 
-# Drop a .pth so `python3 -m usbypass` works regardless of distro pathing.
-SITE="$(python3 -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
-if [[ -d "$SITE" ]]; then
-    echo "$PREFIX" > "${SITE}/usbypass.pth"
-    log "Added ${SITE}/usbypass.pth"
-else
-    warn "Could not determine site-packages directory; CLI shim may fail."
+# The shim scripts now prepend /opt/usbypass to PYTHONPATH explicitly,
+# so the .pth-file dance is no longer required for `python3 -m usbypass`
+# to find the package. As defense-in-depth we still try to drop a .pth
+# into every existing site-packages directory the running interpreter
+# knows about, so direct `python3 -m usbypass ...` invocations also
+# resolve. We do NOT fail the installer if every candidate is missing.
+PTH_INSTALLED=0
+for SITE in $(python3 -c 'import site; [print(p) for p in site.getsitepackages()]' 2>/dev/null); do
+    if [[ -d "$SITE" && -w "$SITE" ]]; then
+        echo "$PREFIX" > "${SITE}/usbypass.pth" || continue
+        log "Added ${SITE}/usbypass.pth"
+        PTH_INSTALLED=1
+    fi
+done
+if [[ "$PTH_INSTALLED" -eq 0 ]]; then
+    log "No writable site-packages found — relying on PYTHONPATH fallback in shim scripts."
 fi
 
 # ---------------------------------------------------------------------------

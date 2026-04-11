@@ -1,8 +1,12 @@
 #!/bin/sh
 # PAM helper — called by pam_exec.so. Must exit fast.
 #
-# Exit 0 -> PAM sees success and short-circuits the auth stack.
-# Exit non-zero -> PAM falls through to the next module (pam_unix -> password).
+# Exit 0       -> PAM sees success and short-circuits the auth stack.
+# Exit non-zero-> PAM falls through to the next module (pam_unix -> password).
 #
-# We use -S to skip site-packages warm-up; imports are already minimal.
-exec /usr/bin/env python3 -S -m usbypass verify
+# IMPORTANT: do NOT pass `-S` to python here. We *need* site.py to load
+# so packaged installs (.deb/.rpm/.pkg) can find the `usbypass` module
+# in /usr/lib*/python*/site-packages. The few-ms warmup is worth the
+# correctness. We also export PYTHONPATH so install.sh layouts (package
+# at /opt/usbypass) work without relying on a .pth file.
+PYTHONPATH=/opt/usbypass${PYTHONPATH:+:$PYTHONPATH} exec /usr/bin/env python3 -m usbypass verify
