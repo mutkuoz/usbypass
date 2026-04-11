@@ -1,9 +1,13 @@
 # USBYPASS — route USB mass-storage add/remove events to our handler.
-# Debian package variant: shims live in /usr/libexec, not /usr/local/libexec.
+# Debian package variant: shims live in /usr/libexec.
 #
-# Match USB block *partitions* (sdXN). The handler decides whether the
-# serial is enrolled.
+# add/change events delegate to a systemd unit (usbypass-verify@<kernel>.service)
+# instead of running our handler directly under udev. udev's sandbox blocks
+# the mount(2) syscall on hardened distros, so the temp-mount fallback would
+# never work from a RUN+= context. The systemd unit runs without that filter.
+#
+# remove stays inline because it must fire immediately and does no mounting.
 
-ACTION=="add",    SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", RUN+="/usr/libexec/usbypass-udev-handler add %k"
-ACTION=="change", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", RUN+="/usr/libexec/usbypass-udev-handler add %k"
+ACTION=="add",    SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", TAG+="systemd", ENV{SYSTEMD_WANTS}+="usbypass-verify@$kernel.service"
+ACTION=="change", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", TAG+="systemd", ENV{SYSTEMD_WANTS}+="usbypass-verify@$kernel.service"
 ACTION=="remove", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]",                    RUN+="/usr/libexec/usbypass-udev-handler remove %k"

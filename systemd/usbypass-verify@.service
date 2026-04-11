@@ -1,0 +1,47 @@
+[Unit]
+Description=USBYPASS verify USB device %i
+Documentation=https://github.com/mutkuoz/usbypass
+DefaultDependencies=no
+# We just need user-space to be alive enough to run python and mount.
+# We deliberately do *not* depend on local-fs.target because we may be
+# triggered before it during early boot — and we only touch /run.
+After=systemd-udevd.service
+# Run after the device node actually appears.
+BindsTo=dev-%i.device
+After=dev-%i.device
+
+[Service]
+Type=oneshot
+# IMPORTANT: this unit must NOT inherit systemd-udevd's syscall filter.
+# That filter blocks mount(2)/umount(2), so the temp-mount fallback
+# would never work. We run as a regular root unit so the kernel lets
+# us mount the partition just long enough to read the handshake.
+ExecStart=/usr/bin/env python3 -m usbypass handle-udev add %I
+# Keep us snappy: udev fires this for every USB plug.
+TimeoutStartSec=20
+# Hardening: this unit only needs to read /etc/usbypass/secret.key,
+# read /var/lib/usbypass/enrolled.json, write /run/usbypass/state.json,
+# and call mount(2)/umount(2). Lock everything else down.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+NoNewPrivileges=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=/run/usbypass /run/usbypass/mnt
+ReadOnlyPaths=/etc/usbypass /var/lib/usbypass
+# We must keep CAP_SYS_ADMIN for mount() and CAP_DAC_READ_SEARCH for
+# reading the host secret. Drop everything else.
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_DAC_READ_SEARCH
+AmbientCapabilities=CAP_SYS_ADMIN CAP_DAC_READ_SEARCH
+
+[Install]
+# This is a template unit; instances are started by the udev rule via
+# `systemctl start --no-block usbypass-verify@<kernel-name>.service`.
+# No WantedBy needed.

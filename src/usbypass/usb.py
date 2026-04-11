@@ -388,26 +388,53 @@ def read_handshake_any(devnode: str, known_mountpoint: Path | None) -> bytes | N
 
     Returns ``None`` if no handshake can be read by any path.
     """
+    blob, _ = read_handshake_diag(devnode, known_mountpoint)
+    return blob
+
+
+def read_handshake_diag(
+    devnode: str,
+    known_mountpoint: Path | None,
+) -> tuple[bytes | None, str]:
+    """Like :func:`read_handshake_any` but also returns a diagnostic string.
+
+    The second tuple element is a short human-readable trace of which
+    paths were tried and why each failed. The handler logs it to make
+    real failures (mount(2) blocked, fs unrecognized, file missing,
+    etc.) visible in journalctl.
+    """
+    trace: list[str] = []
+
     if known_mountpoint is not None:
         blob = read_handshake(known_mountpoint)
         if blob is not None:
-            return blob
+            return blob, f"hit known mount {known_mountpoint}"
+        trace.append(f"known mount {known_mountpoint} had no handshake")
 
     mounts = _read_mountinfo()
     mp = mounts.get(devnode)
     if mp:
         blob = read_handshake(Path(mp))
         if blob is not None:
-            return blob
+            return blob, f"hit mountinfo entry {mp}"
+        trace.append(f"mountinfo {mp} had no handshake")
+    else:
+        trace.append("no mountinfo entry")
 
     if os.geteuid() != 0:
-        return None
+        trace.append("temp-mount skipped (not root)")
+        return None, "; ".join(trace)
 
     try:
         with temp_mount_readonly(devnode) as tm:
-            return read_handshake(tm.mountpoint)
-    except TempMountError:
-        return None
+            blob = read_handshake(tm.mountpoint)
+            if blob is not None:
+                return blob, f"temp-mount succeeded at {tm.mountpoint}"
+            trace.append(f"temp-mount {tm.mountpoint} had no handshake file")
+            return None, "; ".join(trace)
+    except TempMountError as exc:
+        trace.append(f"temp-mount failed: {exc}")
+        return None, "; ".join(trace)
 
 
 # ---------------------------------------------------------------------------

@@ -114,10 +114,14 @@ install -d -m 0755 "$UDEV_RULES_DIR"
 install -m 0644 "${SCRIPT_DIR}/udev/99-usbypass.rules" "${UDEV_RULES_DIR}/99-usbypass.rules"
 udevadm control --reload-rules || warn "udevadm reload failed (ok in containers)"
 
-log "Installing systemd unit"
+log "Installing systemd units"
 install -d -m 0755 "$SYSTEMD_DIR"
 install -m 0644 "${SCRIPT_DIR}/systemd/usbypass-clear-sudo.service" \
     "${SYSTEMD_DIR}/usbypass-clear-sudo.service"
+# Template unit invoked by the udev rule via SYSTEMD_WANTS — runs the
+# verifier outside udev's syscall sandbox so mount(2) is allowed.
+install -m 0644 "${SCRIPT_DIR}/systemd/usbypass-verify@.service" \
+    "${SYSTEMD_DIR}/usbypass-verify@.service"
 if command -v systemctl >/dev/null; then
     systemctl daemon-reload || warn "systemctl daemon-reload failed"
 fi

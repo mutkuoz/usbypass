@@ -45,15 +45,16 @@ def handle_add(kernel_name: str) -> int:
     # will privately temp-mount the partition read-only ourselves.
     mount = usb.wait_for_mount(devnode)
 
-    stored = usb.read_handshake_any(devnode, mount)
+    stored, trace = usb.read_handshake_diag(devnode, mount)
     if stored is None:
         log.warning(
-            "USB %s (serial=%s) enrolled but handshake unreadable (no mount "
-            "and temp-mount failed)",
+            "USB %s (serial=%s) enrolled but handshake unreadable: %s",
             devnode,
             serial,
+            trace,
         )
         return 0
+    log.info("USB %s handshake source: %s", devnode, trace)
 
     # Pick the first matching enrolled user whose HMAC checks out.
     # In practice a single serial is tied to a single user.

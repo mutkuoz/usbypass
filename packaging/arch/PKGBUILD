@@ -43,9 +43,11 @@ package() {
     install -Dm644 packaging/arch/99-usbypass.rules \
         "$pkgdir/usr/lib/udev/rules.d/99-usbypass.rules"
 
-    # systemd unit
+    # systemd units (clear-sudo + verify@ template)
     install -Dm644 systemd/usbypass-clear-sudo.service \
         "$pkgdir/usr/lib/systemd/system/usbypass-clear-sudo.service"
+    install -Dm644 systemd/usbypass-verify@.service \
+        "$pkgdir/usr/lib/systemd/system/usbypass-verify@.service"
 
     # License + docs
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"

@@ -1,6 +1,9 @@
 # USBYPASS — route USB mass-storage add/remove events to our handler.
 # Arch package variant: shims live in /usr/lib/usbypass.
+#
+# add/change delegates to systemd unit usbypass-verify@<kernel>.service
+# (see comment in the upstream rule for why).
 
-ACTION=="add",    SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", RUN+="/usr/lib/usbypass/usbypass-udev-handler add %k"
-ACTION=="change", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", RUN+="/usr/lib/usbypass/usbypass-udev-handler add %k"
+ACTION=="add",    SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", TAG+="systemd", ENV{SYSTEMD_WANTS}+="usbypass-verify@$kernel.service"
+ACTION=="change", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", TAG+="systemd", ENV{SYSTEMD_WANTS}+="usbypass-verify@$kernel.service"
 ACTION=="remove", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]",                    RUN+="/usr/lib/usbypass/usbypass-udev-handler remove %k"

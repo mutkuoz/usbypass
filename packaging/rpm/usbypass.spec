@@ -62,9 +62,11 @@ install -D -m 0755 scripts/usbypass-udev-handler %{buildroot}%{_libexecdir}/usby
 install -D -m 0644 packaging/rpm/99-usbypass.rules \
     %{buildroot}%{_udevrulesdir}/99-usbypass.rules
 
-# systemd unit.
+# systemd units (clear-sudo + verify@ template)
 install -D -m 0644 systemd/usbypass-clear-sudo.service \
     %{buildroot}%{_unitdir}/usbypass-clear-sudo.service
+install -D -m 0644 systemd/usbypass-verify@.service \
+    %{buildroot}%{_unitdir}/usbypass-verify@.service
 
 # State directories — owned by this package so rpm tracks them.
 install -d -m 0700 %{buildroot}%{_sysconfdir}/usbypass
@@ -102,6 +104,7 @@ fi
 %{_libexecdir}/usbypass-udev-handler
 %{_udevrulesdir}/99-usbypass.rules
 %{_unitdir}/usbypass-clear-sudo.service
+%{_unitdir}/usbypass-verify@.service
 %dir %attr(0700, root, root) %{_sysconfdir}/usbypass
 %dir %attr(0755, root, root) %{_sharedstatedir}/usbypass
 

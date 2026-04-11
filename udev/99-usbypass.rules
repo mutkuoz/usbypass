@@ -4,10 +4,21 @@
 # After installing, run `udevadm control --reload-rules`.
 #
 # We match only USB block *partitions* (sdXN, not whole disks) because
-# that's where the handshake file lives. The handler is responsible for
-# deciding whether the serial is enrolled — keeping the rule permissive
-# avoids distro-specific attribute differences.
+# that's where the handshake file lives.
+#
+# Why we delegate add/change via systemctl:
+#
+#   systemd-udevd is sandboxed with a SystemCallFilter that does NOT
+#   allow mount(2)/umount(2). If we ran our handler directly via RUN+=,
+#   the temp-mount fallback would always fail on Fedora and any other
+#   distro that hardens udev. Instead we kick off a one-shot systemd
+#   service (usbypass-verify@<kernel>.service) which inherits no syscall
+#   filter and can therefore mount the partition long enough to read
+#   the handshake.
+#
+# Remove stays inline because (a) it must fire immediately to clear
+# state and sudo creds, and (b) it does no mounting.
 
-ACTION=="add",    SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", RUN+="/usr/local/libexec/usbypass-udev-handler add %k"
-ACTION=="change", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", RUN+="/usr/local/libexec/usbypass-udev-handler add %k"
+ACTION=="add",    SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", TAG+="systemd", ENV{SYSTEMD_WANTS}+="usbypass-verify@$kernel.service"
+ACTION=="change", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", TAG+="systemd", ENV{SYSTEMD_WANTS}+="usbypass-verify@$kernel.service"
 ACTION=="remove", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]",                    RUN+="/usr/local/libexec/usbypass-udev-handler remove %k"
