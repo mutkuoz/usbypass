@@ -1,7 +1,7 @@
 Source: usbypass
 Section: admin
 Priority: optional
-Maintainer: USBYPASS contributors <noreply@example.com>
+Maintainer: Mehmet Utku ÖZTÜRK <mutkuoz@proton.me>
 Build-Depends:
  debhelper-compat (= 13),
  dh-python,

@@ -6,4 +6,4 @@ usbypass (0.1.0-1) unstable; urgency=medium
     - udev hot-plug/unplug hooks, systemd sudo-cache clear on unplug.
     - Interactive TUI, `usbypass verify-now`, `usbypass doctor`.
 
- -- USBYPASS contributors <noreply@example.com>  Sat, 12 Apr 2026 00:00:00 +0000
+ -- Mehmet Utku ÖZTÜRK <mutkuoz@proton.me>  Sat, 12 Apr 2026 00:00:00 +0000

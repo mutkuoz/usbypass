@@ -1,10 +1,10 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: usbypass
-Upstream-Contact: USBYPASS contributors <noreply@example.com>
+Upstream-Contact: Mehmet Utku ÖZTÜRK <mutkuoz@proton.me>
 Source: https://github.com/mutkuoz/usbypass
 
 Files: *
-Copyright: 2026 USBYPASS contributors
+Copyright: 2026 Mehmet Utku ÖZTÜRK <mutkuoz@proton.me>
 License: MIT
 
 License: MIT

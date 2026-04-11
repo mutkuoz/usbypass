@@ -9,7 +9,7 @@ description = "Use a physical USB drive as a password-bypass key for Linux PAM (
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.9"
-authors = [{ name = "USBYPASS contributors" }]
+authors = [{ name = "Mehmet Utku ÖZTÜRK", email = "mutkuoz@proton.me" }]
 keywords = ["pam", "usb", "authentication", "sudo", "linux"]
 classifiers = [
     "Development Status :: 4 - Beta",

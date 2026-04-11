@@ -109,5 +109,5 @@ fi
 %dir %attr(0755, root, root) %{_sharedstatedir}/usbypass
 
 %changelog
-* Sun Apr 12 2026 USBYPASS contributors <noreply@example.com> - 0.1.0-1
+* Sun Apr 12 2026 Mehmet Utku ÖZTÜRK <mutkuoz@proton.me> - 0.1.0-1
 - Initial RPM release.
