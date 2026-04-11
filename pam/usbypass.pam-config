@@ -1,0 +1,6 @@
+Name: USBYPASS key authentication
+Default: yes
+Priority: 192
+Auth-Type: Primary
+Auth:
+	[success=end default=ignore]	pam_exec.so quiet /usr/local/libexec/usbypass-pam-helper

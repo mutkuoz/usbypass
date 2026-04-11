@@ -1,0 +1,21 @@
+[Unit]
+Description=USBYPASS — clear cached sudo credentials on USB key removal
+Documentation=https://github.com/mutkuoz/usbypass
+DefaultDependencies=no
+# We want this to run even during shutdown/rescue; no ordering needed.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env python3 -m usbypass clear-sudo
+# Hardening: the unit only needs to delete files under /run/sudo and
+# /var/db/sudo. Lock everything else down.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ReadWritePaths=/run/sudo /var/run/sudo /var/db/sudo
+# Don't fail if a path doesn't exist on this distro.
+ReadWritePaths=-/run/sudo -/var/run/sudo -/var/db/sudo
+
+[Install]
+WantedBy=multi-user.target

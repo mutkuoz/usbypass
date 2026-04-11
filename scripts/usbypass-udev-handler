@@ -1,0 +1,8 @@
+#!/bin/sh
+# udev RUN helper — invoked on USB add/remove events.
+#
+# Usage: usbypass-udev-handler <add|remove> <kernel-name>
+#
+# udev kills children that run too long. The Python handler enforces
+# its own short timeout on mount waiting; this shim just forwards.
+exec /usr/bin/env python3 -m usbypass handle-udev "$@"

@@ -1,0 +1,12 @@
+# USBYPASS snippet — inserted into /etc/pam.d/sudo and /etc/pam.d/system-auth
+# on Fedora/Arch/other distros. Bracketed by markers so uninstall can
+# remove exactly this block.
+#
+# Control logic:
+#   success=done    -> USB verified; short-circuit the auth stack.
+#   default=ignore  -> helper failed (no USB, wrong serial, etc.);
+#                      fall through to pam_unix (password prompt).
+
+# >>> USBYPASS BEGIN (do not edit inside this block)
+auth  [success=done default=ignore]  pam_exec.so quiet /usr/local/libexec/usbypass-pam-helper
+# <<< USBYPASS END

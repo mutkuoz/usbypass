@@ -1,0 +1,8 @@
+#!/bin/sh
+# PAM helper — called by pam_exec.so. Must exit fast.
+#
+# Exit 0 -> PAM sees success and short-circuits the auth stack.
+# Exit non-zero -> PAM falls through to the next module (pam_unix -> password).
+#
+# We use -S to skip site-packages warm-up; imports are already minimal.
+exec /usr/bin/env python3 -S -m usbypass verify

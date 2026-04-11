@@ -1,0 +1,3 @@
+#!/bin/sh
+# USBYPASS CLI shim. Installed to /usr/local/bin/usbypass by install.sh.
+exec /usr/bin/env python3 -m usbypass "$@"

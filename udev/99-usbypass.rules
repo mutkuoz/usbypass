@@ -1,0 +1,13 @@
+# USBYPASS — route USB mass-storage add/remove events to our handler.
+#
+# Installed to /etc/udev/rules.d/99-usbypass.rules by install.sh.
+# After installing, run `udevadm control --reload-rules`.
+#
+# We match only USB block *partitions* (sdXN, not whole disks) because
+# that's where the handshake file lives. The handler is responsible for
+# deciding whether the serial is enrolled — keeping the rule permissive
+# avoids distro-specific attribute differences.
+
+ACTION=="add",    SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", RUN+="/usr/local/libexec/usbypass-udev-handler add %k"
+ACTION=="change", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", RUN+="/usr/local/libexec/usbypass-udev-handler add %k"
+ACTION=="remove", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]",                    RUN+="/usr/local/libexec/usbypass-udev-handler remove %k"

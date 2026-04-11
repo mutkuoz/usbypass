@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "usbypass"
+version = "0.1.0"
+description = "Use a physical USB drive as a password-bypass key for Linux PAM (sudo/login)."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+authors = [{ name = "USBYPASS contributors" }]
+keywords = ["pam", "usb", "authentication", "sudo", "linux"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration :: Authentication/Directory",
+]
+dependencies = [
+    "pyudev>=0.24",
+]
+
+[project.scripts]
+usbypass = "usbypass.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/mutkuoz/usbypass"
+Issues = "https://github.com/mutkuoz/usbypass/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+usbypass = ["py.typed"]
