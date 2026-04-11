@@ -25,7 +25,8 @@ def test_write_and_read_state() -> None:
 def test_state_file_permissions() -> None:
     state.write_state("alice", "ABC123")
     st = os.stat(state.state_file_path())
-    assert stat.S_IMODE(st.st_mode) == 0o600
+    # State file is world-readable on purpose: see state.write_state.
+    assert stat.S_IMODE(st.st_mode) == 0o644
 
 
 def test_clear_state_removes_file() -> None:

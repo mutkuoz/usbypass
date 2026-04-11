@@ -8,7 +8,10 @@ not require pyudev — it reads ``/proc/self/mountinfo`` and
 
 from __future__ import annotations
 
+import contextlib
 import os
+import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,20 +20,24 @@ from typing import Iterable, Iterator
 from usbypass.config import (
     MOUNT_WAIT_INTERVAL_S,
     MOUNT_WAIT_TIMEOUT_S,
+    RUN_DIR,
+    TEMP_MOUNT_SUBDIR,
     USB_HANDSHAKE_REL,
 )
 
 
 @dataclass(frozen=True)
 class UsbPartition:
-    devnode: str           # e.g. /dev/sdb1
-    parent_devnode: str    # e.g. /dev/sdb
-    serial: str            # ID_SERIAL_SHORT from udev
-    fs_uuid: str | None    # ID_FS_UUID
-    fs_label: str | None   # ID_FS_LABEL
+    devnode: str               # e.g. /dev/sdb1
+    parent_devnode: str        # e.g. /dev/sdb
+    serial: str                # ID_SERIAL_SHORT from udev
+    fs_uuid: str | None        # ID_FS_UUID
+    fs_label: str | None       # ID_FS_LABEL
+    fs_type: str | None        # ID_FS_TYPE (e.g. "exfat", "vfat", "ntfs")
     vendor: str | None
     model: str | None
     mountpoint: Path | None
+    size_bytes: int | None     # partition size in bytes, from sysfs
 
 
 # ---------------------------------------------------------------------------
@@ -59,12 +66,29 @@ def list_usb_partitions() -> list[UsbPartition]:
                 serial=serial,
                 fs_uuid=dev.get("ID_FS_UUID"),
                 fs_label=dev.get("ID_FS_LABEL"),
+                fs_type=dev.get("ID_FS_TYPE"),
                 vendor=dev.get("ID_VENDOR"),
                 model=dev.get("ID_MODEL"),
                 mountpoint=Path(mp) if mp else None,
+                size_bytes=_sysfs_partition_size_bytes(dev.device_node),
             )
         )
     return out
+
+
+def _sysfs_partition_size_bytes(devnode: str) -> int | None:
+    """Read the partition size (in bytes) from sysfs.
+
+    sysfs stores the size in 512-byte sectors at
+    ``/sys/class/block/<name>/size``.
+    """
+    name = os.path.basename(devnode)
+    path = Path("/sys/class/block") / name / "size"
+    try:
+        sectors = int(path.read_text().strip())
+    except (OSError, ValueError):
+        return None
+    return sectors * 512
 
 
 def serial_for_devnode(devnode: str) -> str | None:
@@ -242,3 +266,218 @@ def iter_enrolled_matches(serial: str, enrolled: dict) -> Iterator[str]:
             if entry.get("serial") == serial:
                 yield username
                 break
+
+
+# ---------------------------------------------------------------------------
+# Private read-only temp-mount
+# ---------------------------------------------------------------------------
+#
+# When the udev handler fires (or `usbypass verify-now` runs) on a headless
+# box, nothing may have auto-mounted the USB. We can still do our job by
+# privately mounting the partition read-only, reading the handshake, and
+# unmounting — all without polluting the user's mountinfo.
+#
+# We use subprocess(mount/umount) instead of libmount/ctypes because it
+# gives us free filesystem-type autodetection and the external commands
+# know how to negotiate with any helper binaries on the host.
+
+
+class TempMountError(RuntimeError):
+    """Raised when a read-only temp-mount cannot be established."""
+
+
+@dataclass
+class TempMount:
+    devnode: str
+    mountpoint: Path
+    _mounted: bool = True
+
+    def unmount(self) -> None:
+        if not self._mounted:
+            return
+        try:
+            subprocess.run(
+                ["umount", "--lazy", str(self.mountpoint)],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=4,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        self._mounted = False
+        # Best-effort cleanup of the empty dir.
+        try:
+            self.mountpoint.rmdir()
+        except OSError:
+            pass
+
+
+@contextlib.contextmanager
+def temp_mount_readonly(devnode: str) -> Iterator[TempMount]:
+    """Mount ``devnode`` read-only in a private temp dir.
+
+    Yields a :class:`TempMount` and always unmounts on exit. Requires
+    root. Raises :class:`TempMountError` if the mount fails for any
+    reason — caller should treat that as "can't verify, fall through".
+    """
+    if os.geteuid() != 0:
+        raise TempMountError("temp_mount_readonly requires root")
+
+    parent = RUN_DIR / TEMP_MOUNT_SUBDIR
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+        os.chmod(parent, 0o755)
+    except OSError as exc:
+        raise TempMountError(f"cannot create {parent}: {exc}") from exc
+
+    mp = Path(tempfile.mkdtemp(prefix="usbypass-", dir=str(parent)))
+    try:
+        os.chmod(mp, 0o755)
+    except OSError:
+        pass
+
+    # Try mount(8) with filesystem autodetection and RO. On a mis-
+    # typed / encrypted / damaged partition this will exit non-zero
+    # quickly, which is fine — we'll just refuse to verify.
+    try:
+        result = subprocess.run(
+            ["mount", "-o", "ro,noexec,nosuid,nodev", devnode, str(mp)],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=8,
+        )
+    except FileNotFoundError as exc:
+        try:
+            mp.rmdir()
+        except OSError:
+            pass
+        raise TempMountError("mount(8) not found on PATH") from exc
+    except subprocess.TimeoutExpired as exc:
+        try:
+            mp.rmdir()
+        except OSError:
+            pass
+        raise TempMountError(f"mount of {devnode} timed out") from exc
+
+    if result.returncode != 0:
+        err = (result.stderr or b"").decode("utf-8", "replace").strip()
+        try:
+            mp.rmdir()
+        except OSError:
+            pass
+        raise TempMountError(
+            f"mount of {devnode} failed (rc={result.returncode}): {err or '(no output)'}"
+        )
+
+    tm = TempMount(devnode=devnode, mountpoint=mp)
+    try:
+        yield tm
+    finally:
+        tm.unmount()
+
+
+def read_handshake_any(devnode: str, known_mountpoint: Path | None) -> bytes | None:
+    """Fetch the handshake for ``devnode``, auto-mounting if necessary.
+
+    Preference order:
+      1. ``known_mountpoint`` (if provided and the file is there).
+      2. Whatever mountpoint ``/proc/self/mountinfo`` reports for this devnode.
+      3. A private read-only temp-mount (requires root).
+
+    Returns ``None`` if no handshake can be read by any path.
+    """
+    if known_mountpoint is not None:
+        blob = read_handshake(known_mountpoint)
+        if blob is not None:
+            return blob
+
+    mounts = _read_mountinfo()
+    mp = mounts.get(devnode)
+    if mp:
+        blob = read_handshake(Path(mp))
+        if blob is not None:
+            return blob
+
+    if os.geteuid() != 0:
+        return None
+
+    try:
+        with temp_mount_readonly(devnode) as tm:
+            return read_handshake(tm.mountpoint)
+    except TempMountError:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# pyudev-free enumeration (fallback for when pyudev isn't installed)
+# ---------------------------------------------------------------------------
+
+
+def list_usb_partitions_sysfs() -> list[UsbPartition]:
+    """Enumerate USB partitions using only /sys and /proc — no pyudev.
+
+    Coarser than :func:`list_usb_partitions` (vendor/model are looked up
+    from sysfs rather than udev's ID_* database) but works in minimal
+    environments and as a fallback when the pyudev import fails.
+    """
+    mounts = _read_mountinfo()
+    out: list[UsbPartition] = []
+    sys_block = Path("/sys/block")
+    if not sys_block.is_dir():
+        return out
+    for disk in sorted(sys_block.iterdir()):
+        # Skip loop, ram, dm, zram, nvme — we only want sdXN.
+        if not disk.name.startswith("sd"):
+            continue
+        device_link = disk / "device"
+        if not device_link.exists():
+            continue
+        # Only USB-backed disks: the device path must contain a usbN hop.
+        try:
+            real = device_link.resolve()
+        except OSError:
+            continue
+        if "/usb" not in str(real):
+            continue
+        serial = _sysfs_serial_for_devnode(f"/dev/{disk.name}") or ""
+        vendor = _read_sysfs_text(real / "vendor")
+        model = _read_sysfs_text(real / "model")
+        for part in sorted(disk.iterdir()):
+            if not part.is_dir():
+                continue
+            if not part.name.startswith(disk.name):
+                continue
+            devnode = f"/dev/{part.name}"
+            mp = mounts.get(devnode)
+            out.append(
+                UsbPartition(
+                    devnode=devnode,
+                    parent_devnode=f"/dev/{disk.name}",
+                    serial=serial,
+                    fs_uuid=None,
+                    fs_label=None,
+                    fs_type=None,
+                    vendor=vendor,
+                    model=model,
+                    mountpoint=Path(mp) if mp else None,
+                    size_bytes=_sysfs_partition_size_bytes(devnode),
+                )
+            )
+    return out
+
+
+def list_usb_partitions_safe() -> list[UsbPartition]:
+    """Try the pyudev-backed enumerator and fall back to sysfs on failure."""
+    try:
+        return list_usb_partitions()
+    except Exception:
+        return list_usb_partitions_sysfs()
+
+
+def _read_sysfs_text(path: Path) -> str | None:
+    try:
+        return path.read_text().strip() or None
+    except OSError:
+        return None

@@ -1,0 +1,9 @@
+usbypass (0.1.0-1) unstable; urgency=medium
+
+  * Initial release.
+    - Physical USB drive as a password-bypass key for Linux PAM.
+    - HMAC-SHA256 handshake bound to USB controller serial.
+    - udev hot-plug/unplug hooks, systemd sudo-cache clear on unplug.
+    - Interactive TUI, `usbypass verify-now`, `usbypass doctor`.
+
+ -- USBYPASS contributors <noreply@example.com>  Sat, 12 Apr 2026 00:00:00 +0000

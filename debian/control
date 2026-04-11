@@ -1,0 +1,41 @@
+Source: usbypass
+Section: admin
+Priority: optional
+Maintainer: USBYPASS contributors <noreply@example.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-python,
+ python3-all,
+ python3-setuptools,
+Standards-Version: 4.6.2
+Homepage: https://github.com/mutkuoz/usbypass
+Vcs-Git: https://github.com/mutkuoz/usbypass.git
+Vcs-Browser: https://github.com/mutkuoz/usbypass
+Rules-Requires-Root: no
+
+Package: usbypass
+Architecture: all
+Depends:
+ ${misc:Depends},
+ ${python3:Depends},
+ python3 (>= 3.9),
+ python3-pyudev,
+ udev,
+ libpam-modules,
+ mount,
+Recommends:
+ systemd,
+Description: Use a physical USB drive as a password-bypass key for Linux PAM
+ USBYPASS turns any USB mass-storage device into an authentication token
+ wired into PAM. When the enrolled key is plugged in, sudo and login skip
+ the password prompt. When it is absent, the system behaves like a
+ perfectly ordinary, password-protected Linux box.
+ .
+ Anti-clone protection binds the stored handshake to the physical USB
+ controller's serial, so dd-ing the drive to another stick will not
+ produce a working clone. Password authentication always remains
+ available as a fallback.
+ .
+ This is a convenience layer over PAM. It is NOT two-factor
+ authentication, and it does not protect data at rest — combine it
+ with LUKS / dm-crypt for real confidentiality.

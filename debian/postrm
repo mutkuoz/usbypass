@@ -1,0 +1,25 @@
+#!/bin/sh
+# USBYPASS postrm
+set -e
+
+case "$1" in
+    purge)
+        # Remove state the package created but did not ship.
+        rm -rf /var/lib/usbypass
+        rm -rf /etc/usbypass
+        rm -rf /run/usbypass
+        if command -v udevadm >/dev/null 2>&1; then
+            udevadm control --reload-rules || true
+        fi
+        ;;
+    remove|upgrade|abort-install|abort-upgrade|disappear|failed-upgrade)
+        ;;
+    *)
+        echo "postrm called with unknown argument '$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

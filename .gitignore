@@ -8,3 +8,22 @@ build/
 dist/
 *.bak
 .usbypass.bak
+
+# Local agent / tooling state — never publish
+.claude/
+.remember/
+
+# Debian build artifacts (kept under debian/ so dh_clean can find them)
+debian/usbypass/
+debian/.debhelper/
+debian/files
+debian/debhelper-build-stamp
+debian/usbypass.substvars
+debian/usbypass.debhelper.log
+debian/*.debhelper
+
+# Build outputs
+*.deb
+*.rpm
+*.pkg.tar.*
+

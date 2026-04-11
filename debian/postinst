@@ -1,0 +1,45 @@
+#!/bin/sh
+# USBYPASS postinst
+set -e
+
+case "$1" in
+    configure)
+        # Create state directories.
+        install -d -m 0700 /etc/usbypass
+        install -d -m 0755 /var/lib/usbypass
+        install -d -m 0755 /run/usbypass
+
+        # Generate the host secret on first install.
+        if [ ! -s /etc/usbypass/secret.key ]; then
+            python3 -c 'from usbypass import crypto; crypto.generate_secret()' || true
+        fi
+
+        # Reload udev rules.
+        if [ -x /bin/udevadm ] || [ -x /sbin/udevadm ] || command -v udevadm >/dev/null 2>&1; then
+            udevadm control --reload-rules || true
+            udevadm trigger --subsystem-match=block --action=change || true
+        fi
+
+        # Reload systemd.
+        if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
+            systemctl daemon-reload || true
+        fi
+
+        # Register our pam-auth-update profile.
+        if command -v pam-auth-update >/dev/null 2>&1; then
+            pam-auth-update --package || true
+        fi
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument '$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

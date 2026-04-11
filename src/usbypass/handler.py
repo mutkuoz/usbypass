@@ -25,7 +25,12 @@ log = get_logger()
 
 def handle_add(kernel_name: str) -> int:
     devnode = f"/dev/{kernel_name}"
-    serial = usb.serial_for_devnode(devnode)
+    try:
+        serial = usb.serial_for_devnode(devnode)
+    except Exception as exc:
+        # pyudev can trip over races at add-time; fall back to sysfs.
+        log.info("pyudev lookup for %s failed (%s); trying sysfs", devnode, exc)
+        serial = usb._sysfs_serial_for_devnode(devnode)
     if not serial:
         # Not a USB device we care about, or kernel hasn't populated
         # device attributes yet. Bail silently.
@@ -36,14 +41,18 @@ def handle_add(kernel_name: str) -> int:
     if not matches:
         return 0  # drive inserted but not enrolled — nothing to do
 
+    # Give the desktop auto-mounter a shot; if nothing lands in time, we
+    # will privately temp-mount the partition read-only ourselves.
     mount = usb.wait_for_mount(devnode)
-    if mount is None:
-        log.info("USB %s (serial=%s) enrolled but not auto-mounted; skipping", devnode, serial)
-        return 0
 
-    stored = usb.read_handshake(mount)
+    stored = usb.read_handshake_any(devnode, mount)
     if stored is None:
-        log.warning("USB %s: enrolled serial but missing handshake file", devnode)
+        log.warning(
+            "USB %s (serial=%s) enrolled but handshake unreadable (no mount "
+            "and temp-mount failed)",
+            devnode,
+            serial,
+        )
         return 0
 
     # Pick the first matching enrolled user whose HMAC checks out.
@@ -56,7 +65,7 @@ def handle_add(kernel_name: str) -> int:
                 username,
                 serial,
                 devnode,
-                mount,
+                mount or "<temp>",
             )
             return 0
 

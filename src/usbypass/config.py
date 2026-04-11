@@ -45,8 +45,15 @@ SUDO_TS_DIRS = (
 PAM_BEGIN_MARKER = "# >>> USBYPASS BEGIN (do not edit inside this block)"
 PAM_END_MARKER = "# <<< USBYPASS END"
 
-# How long the udev add-handler will poll for a mount to appear.
-MOUNT_WAIT_TIMEOUT_S = 0.5
-MOUNT_WAIT_INTERVAL_S = 0.025
+# How long the udev add-handler will poll for a mount to appear before
+# falling back to a private temp-mount. udisks2 auto-mount of exfat can
+# take 1–3s, and we want to wait long enough to let the desktop win on
+# workstation installs — but not so long udev kills us.
+MOUNT_WAIT_TIMEOUT_S = 4.0
+MOUNT_WAIT_INTERVAL_S = 0.05
+
+# Where the handler puts its private read-only temp-mount when no
+# auto-mount appears. Kept under RUN_DIR so it disappears on reboot.
+TEMP_MOUNT_SUBDIR = "mnt"
 
 LOG_TAG = "usbypass"

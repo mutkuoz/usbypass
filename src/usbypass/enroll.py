@@ -1,18 +1,22 @@
 """`usbypass enroll` — interactive enrollment of a USB drive as a key.
 
-Run as root. The user selects (or passes ``--device``) a mounted USB
-partition; we compute the handshake, write it to the drive, and add the
-serial to the enrollment registry.
+Run as root. The user selects (or passes ``--device``) a USB partition.
+If the desktop (or udisks2) has already mounted it, we write the
+handshake there. If nothing has mounted it, we quietly temp-mount the
+device read-write ourselves, write, fsync, and unmount.
 """
 
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Iterable
 
 from usbypass import crypto, enrollment, usb
+from usbypass.config import RUN_DIR, TEMP_MOUNT_SUBDIR
 from usbypass.logger import get_logger
 
 log = get_logger()
@@ -44,12 +48,10 @@ def _prompt_choice(partitions: list[usb.UsbPartition]) -> usb.UsbPartition:
 
 
 def select_partition(device: str | None) -> usb.UsbPartition:
-    parts = usb.list_usb_partitions()
+    parts = usb.list_usb_partitions_safe()
     if not parts:
         raise EnrollError(
-            "No USB partitions detected. Plug the drive in first and make "
-            "sure it is mounted (e.g. via your file manager or `udisksctl "
-            "mount -b /dev/sdX1`)."
+            "No USB partitions detected. Plug the drive in first."
         )
     if device:
         for p in parts:
@@ -64,6 +66,77 @@ def select_partition(device: str | None) -> usb.UsbPartition:
             "Pass --device /dev/sdXN explicitly."
         )
     return _prompt_choice(parts)
+
+
+class _WritableMount:
+    """Context manager yielding a read-write mount for ``devnode``.
+
+    If the partition is already mounted somewhere (by udisks2, the
+    desktop, etc.) we use that mountpoint and don't unmount on exit.
+    Otherwise we ``mount -o rw`` it under ``/run/usbypass/mnt/`` and
+    unmount on exit.
+    """
+
+    def __init__(self, part: usb.UsbPartition) -> None:
+        self.part = part
+        self.mountpoint: Path | None = None
+        self._owned = False
+
+    def __enter__(self) -> Path:
+        if self.part.mountpoint is not None:
+            self.mountpoint = self.part.mountpoint
+            return self.mountpoint
+        if os.geteuid() != 0:
+            raise EnrollError(
+                f"{self.part.devnode} is not mounted and enrollment must "
+                "run as root to temp-mount it. Re-run with sudo."
+            )
+        parent = RUN_DIR / TEMP_MOUNT_SUBDIR
+        parent.mkdir(parents=True, exist_ok=True)
+        mp = Path(tempfile.mkdtemp(prefix="enroll-", dir=str(parent)))
+        try:
+            subprocess.run(
+                ["mount", "-o", "rw,noexec,nosuid,nodev", self.part.devnode, str(mp)],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=10,
+            )
+        except FileNotFoundError as exc:
+            try: mp.rmdir()
+            except OSError: pass
+            raise EnrollError("mount(8) not found on PATH") from exc
+        except subprocess.CalledProcessError as exc:
+            try: mp.rmdir()
+            except OSError: pass
+            err = (exc.stderr or b"").decode("utf-8", "replace").strip()
+            raise EnrollError(
+                f"could not mount {self.part.devnode}: {err or '(no output)'}"
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            try: mp.rmdir()
+            except OSError: pass
+            raise EnrollError(f"mount of {self.part.devnode} timed out") from exc
+        self.mountpoint = mp
+        self._owned = True
+        return mp
+
+    def __exit__(self, *exc_info) -> None:
+        if self._owned and self.mountpoint is not None:
+            try:
+                subprocess.run(
+                    ["umount", str(self.mountpoint)],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=6,
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+            try:
+                self.mountpoint.rmdir()
+            except OSError:
+                pass
 
 
 def enroll(
@@ -89,11 +162,6 @@ def enroll(
             "would be ineffective. Re-run with --force-weak-serial if you "
             "understand the risk."
         )
-    if part.mountpoint is None:
-        raise EnrollError(
-            f"{part.devnode} is not mounted. Mount it first (e.g. "
-            f"`udisksctl mount -b {part.devnode}`) and retry."
-        )
 
     # Ensure the secret exists (install.sh normally does this).
     try:
@@ -103,16 +171,17 @@ def enroll(
         crypto.generate_secret()
 
     payload = crypto.compute_handshake(username, part.serial)
-    path = usb.write_handshake(part.mountpoint, payload)
-    # Round-trip verify — catches disk-full, read-only, or fs quirks.
-    stored = usb.read_handshake(part.mountpoint)
-    if stored != payload:
-        raise EnrollError(
-            f"Round-trip check failed after writing {path}. Is the drive "
-            "read-only or full?"
-        )
-    if not crypto.verify_handshake(username, part.serial, stored):
-        raise EnrollError("HMAC self-check failed — refusing to enroll.")
+    with _WritableMount(part) as mountpoint:
+        path = usb.write_handshake(mountpoint, payload)
+        # Round-trip verify — catches disk-full, read-only, or fs quirks.
+        stored = usb.read_handshake(mountpoint)
+        if stored != payload:
+            raise EnrollError(
+                f"Round-trip check failed after writing {path}. Is the drive "
+                "read-only or full?"
+            )
+        if not crypto.verify_handshake(username, part.serial, stored):
+            raise EnrollError("HMAC self-check failed — refusing to enroll.")
 
     entry = enrollment.add_entry(username, part.serial, label)
     log.info(

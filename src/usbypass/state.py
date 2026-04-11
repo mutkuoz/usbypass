@@ -43,7 +43,11 @@ def write_state(username: str, serial: str, devnode: str | None = None) -> None:
     try:
         with os.fdopen(fd, "w") as f:
             json.dump(payload, f)
-        os.chmod(tmp, 0o600)
+        # World-readable: the state file contains no secrets (username,
+        # serial, devnode, timestamp) and `usbypass status` is routinely
+        # invoked as an unprivileged user. The real secret — the HMAC
+        # key — is guarded separately at /etc/usbypass/secret.key (0600).
+        os.chmod(tmp, 0o644)
         os.replace(tmp, STATE_FILE)
     except Exception:
         try:

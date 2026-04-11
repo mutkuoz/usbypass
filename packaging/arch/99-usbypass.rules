@@ -1,0 +1,6 @@
+# USBYPASS — route USB mass-storage add/remove events to our handler.
+# Arch package variant: shims live in /usr/lib/usbypass.
+
+ACTION=="add",    SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", RUN+="/usr/lib/usbypass/usbypass-udev-handler add %k"
+ACTION=="change", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", RUN+="/usr/lib/usbypass/usbypass-udev-handler add %k"
+ACTION=="remove", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]",                    RUN+="/usr/lib/usbypass/usbypass-udev-handler remove %k"

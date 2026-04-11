@@ -1,0 +1,28 @@
+#!/usr/bin/make -f
+# See debhelper(7)
+export PYBUILD_NAME = usbypass
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_install:
+	dh_auto_install
+	# Install the CLI shim into /usr/bin (not /usr/local) so PATH on
+	# minimal Debian installs picks it up.
+	install -D -m 0755 scripts/usbypass              debian/usbypass/usr/bin/usbypass
+	install -D -m 0755 scripts/usbypass-pam-helper   debian/usbypass/usr/libexec/usbypass-pam-helper
+	install -D -m 0755 scripts/usbypass-udev-handler debian/usbypass/usr/libexec/usbypass-udev-handler
+
+	# udev rule (Debian ships udev rules in /lib/udev/rules.d)
+	install -D -m 0644 debian/udev-rules.d/99-usbypass.rules \
+		debian/usbypass/lib/udev/rules.d/99-usbypass.rules
+
+	# systemd unit
+	install -D -m 0644 systemd/usbypass-clear-sudo.service \
+		debian/usbypass/lib/systemd/system/usbypass-clear-sudo.service
+
+	# pam-auth-update config
+	install -D -m 0644 debian/pam-config.d/usbypass \
+		debian/usbypass/usr/share/pam-configs/usbypass
+
+	# Runtime state dirs are created at install-time via postinst.

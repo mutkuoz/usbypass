@@ -1,0 +1,80 @@
+# Maintainer: USBYPASS contributors <noreply@example.com>
+pkgname=usbypass
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Use a physical USB drive as a password-bypass key for Linux PAM"
+arch=('any')
+url="https://github.com/mutkuoz/usbypass"
+license=('MIT')
+depends=(
+    'python>=3.9'
+    'python-pyudev'
+    'systemd'
+    'util-linux'
+    'pam'
+)
+makedepends=(
+    'python-build'
+    'python-installer'
+    'python-setuptools'
+    'python-wheel'
+)
+source=("$pkgname-$pkgver.tar.gz::https://github.com/mutkuoz/usbypass/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+backup=(
+    'etc/udev/rules.d/99-usbypass.rules'
+)
+
+build() {
+    cd "$pkgname-$pkgver"
+    python -m build --wheel --no-isolation
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+    python -m installer --destdir="$pkgdir" dist/*.whl
+
+    # CLI shim, PAM helper, udev handler
+    install -Dm755 scripts/usbypass              "$pkgdir/usr/bin/usbypass"
+    install -Dm755 scripts/usbypass-pam-helper   "$pkgdir/usr/lib/usbypass/usbypass-pam-helper"
+    install -Dm755 scripts/usbypass-udev-handler "$pkgdir/usr/lib/usbypass/usbypass-udev-handler"
+
+    # udev rule (Arch variant — uses /usr/lib/usbypass)
+    install -Dm644 packaging/arch/99-usbypass.rules \
+        "$pkgdir/usr/lib/udev/rules.d/99-usbypass.rules"
+
+    # systemd unit
+    install -Dm644 systemd/usbypass-clear-sudo.service \
+        "$pkgdir/usr/lib/systemd/system/usbypass-clear-sudo.service"
+
+    # License + docs
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+
+    # Create runtime state dirs as empty so pacman tracks ownership.
+    install -dm700 "$pkgdir/etc/usbypass"
+    install -dm755 "$pkgdir/var/lib/usbypass"
+}
+
+post_install() {
+    # Generate the host secret on first install.
+    if [ ! -s /etc/usbypass/secret.key ]; then
+        /usr/bin/python3 -c 'from usbypass import crypto; crypto.generate_secret()' || true
+    fi
+    /usr/bin/udevadm control --reload-rules || true
+    /usr/bin/udevadm trigger --subsystem-match=block --action=change || true
+    systemctl daemon-reload || true
+    /usr/bin/python3 -m usbypass install --pam-only || true
+}
+
+post_upgrade() {
+    post_install "$@"
+}
+
+pre_remove() {
+    /usr/bin/python3 -m usbypass uninstall || true
+}
+
+post_remove() {
+    /usr/bin/udevadm control --reload-rules || true
+}
