@@ -62,11 +62,13 @@ install -D -m 0755 scripts/usbypass-udev-handler %{buildroot}%{_libexecdir}/usby
 install -D -m 0644 packaging/rpm/99-usbypass.rules \
     %{buildroot}%{_udevrulesdir}/99-usbypass.rules
 
-# systemd units (clear-sudo + verify@ template)
+# systemd units (clear-sudo + verify@ template + verify-boot sweep)
 install -D -m 0644 systemd/usbypass-clear-sudo.service \
     %{buildroot}%{_unitdir}/usbypass-clear-sudo.service
 install -D -m 0644 systemd/usbypass-verify@.service \
     %{buildroot}%{_unitdir}/usbypass-verify@.service
+install -D -m 0644 systemd/usbypass-verify-boot.service \
+    %{buildroot}%{_unitdir}/usbypass-verify-boot.service
 
 # State directories — owned by this package so rpm tracks them.
 install -d -m 0700 %{buildroot}%{_sysconfdir}/usbypass
@@ -82,18 +84,21 @@ fi
 /usr/bin/udevadm control --reload-rules || :
 /usr/bin/udevadm trigger --subsystem-match=block --action=change || :
 %systemd_post usbypass-clear-sudo.service
+%systemd_post usbypass-verify-boot.service
 # Install the PAM hook via our own installer (marker-bracketed edit on
 # Fedora because there is no pam-auth-update equivalent).
 %{__python3} -m usbypass install --pam-only || :
 
 %preun
 %systemd_preun usbypass-clear-sudo.service
+%systemd_preun usbypass-verify-boot.service
 if [ "$1" = 0 ]; then
     %{__python3} -m usbypass uninstall || :
 fi
 
 %postun
 %systemd_postun_with_restart usbypass-clear-sudo.service
+%systemd_postun usbypass-verify-boot.service
 /usr/bin/udevadm control --reload-rules || :
 
 %files -f %{pyproject_files}
@@ -105,6 +110,7 @@ fi
 %{_udevrulesdir}/99-usbypass.rules
 %{_unitdir}/usbypass-clear-sudo.service
 %{_unitdir}/usbypass-verify@.service
+%{_unitdir}/usbypass-verify-boot.service
 %dir %attr(0700, root, root) %{_sysconfdir}/usbypass
 %dir %attr(0755, root, root) %{_sharedstatedir}/usbypass
 

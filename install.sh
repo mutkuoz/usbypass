@@ -131,8 +131,14 @@ install -m 0644 "${SCRIPT_DIR}/systemd/usbypass-clear-sudo.service" \
 # verifier outside udev's syscall sandbox so mount(2) is allowed.
 install -m 0644 "${SCRIPT_DIR}/systemd/usbypass-verify@.service" \
     "${SYSTEMD_DIR}/usbypass-verify@.service"
+# Boot sweep — verifies USB keys that were already plugged in at boot,
+# since /run/usbypass/state.json is tmpfs and wiped on every reboot.
+install -m 0644 "${SCRIPT_DIR}/systemd/usbypass-verify-boot.service" \
+    "${SYSTEMD_DIR}/usbypass-verify-boot.service"
 if command -v systemctl >/dev/null; then
     systemctl daemon-reload || warn "systemctl daemon-reload failed"
+    systemctl enable usbypass-verify-boot.service \
+        || warn "failed to enable usbypass-verify-boot.service"
 fi
 
 # ---------------------------------------------------------------------------

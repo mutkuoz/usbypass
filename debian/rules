@@ -17,11 +17,13 @@ override_dh_auto_install:
 	install -D -m 0644 debian/udev-rules.d/99-usbypass.rules \
 		debian/usbypass/lib/udev/rules.d/99-usbypass.rules
 
-	# systemd units (clear-sudo + verify@ template)
+	# systemd units (clear-sudo + verify@ template + verify-boot sweep)
 	install -D -m 0644 systemd/usbypass-clear-sudo.service \
 		debian/usbypass/lib/systemd/system/usbypass-clear-sudo.service
 	install -D -m 0644 systemd/usbypass-verify@.service \
 		debian/usbypass/lib/systemd/system/usbypass-verify@.service
+	install -D -m 0644 systemd/usbypass-verify-boot.service \
+		debian/usbypass/lib/systemd/system/usbypass-verify-boot.service
 
 	# pam-auth-update config
 	install -D -m 0644 debian/pam-config.d/usbypass \

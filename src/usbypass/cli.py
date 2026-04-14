@@ -357,6 +357,19 @@ def _cmd_doctor(_: argparse.Namespace) -> int:
     systemd_unit = Path("/etc/systemd/system/usbypass-clear-sudo.service")
     check(f"systemd unit at {systemd_unit}", systemd_unit.exists())
 
+    # Distro packages drop units in /{usr,}/lib/systemd/system/; install.sh
+    # drops them in /etc/systemd/system/. Accept any of these locations.
+    boot_unit_candidates = [
+        Path("/etc/systemd/system/usbypass-verify-boot.service"),
+        Path("/lib/systemd/system/usbypass-verify-boot.service"),
+        Path("/usr/lib/systemd/system/usbypass-verify-boot.service"),
+    ]
+    check(
+        "boot-verify unit installed",
+        any(p.exists() for p in boot_unit_candidates),
+        "reinstall to pick up usbypass-verify-boot.service",
+    )
+
     # pyudev optional but strongly recommended
     try:
         import pyudev  # noqa: F401

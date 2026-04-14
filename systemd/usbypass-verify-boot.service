@@ -1,0 +1,29 @@
+[Unit]
+Description=USBYPASS — verify any already-attached USB key at boot
+Documentation=https://github.com/mutkuoz/usbypass
+# /run/usbypass/state.json lives on tmpfs and is wiped on every reboot.
+# The per-device template unit (usbypass-verify@.service) covers hotplug,
+# but systemd-udev's coldplug does not reliably route SYSTEMD_WANTS for
+# block partitions that were already present at boot. This oneshot sweeps
+# every attached USB partition once user-space is far enough along to
+# mount and HMAC-verify it, so the state file is populated before the
+# first sudo/login.
+After=local-fs.target systemd-udevd.service
+Wants=local-fs.target
+ConditionPathExists=/etc/usbypass/secret.key
+
+[Service]
+Type=oneshot
+# Let udev finish enumerating USB devices. `udevadm settle` still works
+# even though the legacy systemd-udev-settle unit is deprecated.
+ExecStartPre=-/usr/bin/udevadm settle --timeout=10
+# Shim lives at /usr/local/bin (install.sh) or /usr/bin (distro pkgs).
+# Use env so both layouts work without per-distro unit files.
+ExecStart=/usr/bin/env usbypass verify-now
+# `verify-now` exits 1 when no enrolled USB is attached — the normal
+# boot-without-key path, not a failure.
+SuccessExitStatus=0 1
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target

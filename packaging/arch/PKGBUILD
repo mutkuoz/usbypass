@@ -43,11 +43,13 @@ package() {
     install -Dm644 packaging/arch/99-usbypass.rules \
         "$pkgdir/usr/lib/udev/rules.d/99-usbypass.rules"
 
-    # systemd units (clear-sudo + verify@ template)
+    # systemd units (clear-sudo + verify@ template + verify-boot sweep)
     install -Dm644 systemd/usbypass-clear-sudo.service \
         "$pkgdir/usr/lib/systemd/system/usbypass-clear-sudo.service"
     install -Dm644 systemd/usbypass-verify@.service \
         "$pkgdir/usr/lib/systemd/system/usbypass-verify@.service"
+    install -Dm644 systemd/usbypass-verify-boot.service \
+        "$pkgdir/usr/lib/systemd/system/usbypass-verify-boot.service"
 
     # License + docs
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
@@ -66,7 +68,12 @@ post_install() {
     /usr/bin/udevadm control --reload-rules || true
     /usr/bin/udevadm trigger --subsystem-match=block --action=change || true
     systemctl daemon-reload || true
+    systemctl enable usbypass-verify-boot.service || true
     /usr/bin/python3 -m usbypass install --pam-only || true
+}
+
+pre_upgrade() {
+    systemctl disable usbypass-verify-boot.service 2>/dev/null || true
 }
 
 post_upgrade() {
@@ -74,6 +81,7 @@ post_upgrade() {
 }
 
 pre_remove() {
+    systemctl disable usbypass-verify-boot.service 2>/dev/null || true
     /usr/bin/python3 -m usbypass uninstall || true
 }
 

@@ -43,8 +43,13 @@ log "Removing udev rule"
 rm -f "${UDEV_RULES_DIR}/99-usbypass.rules"
 command -v udevadm >/dev/null && udevadm control --reload-rules || true
 
-log "Removing systemd unit"
+log "Removing systemd units"
+if command -v systemctl >/dev/null; then
+    systemctl disable usbypass-verify-boot.service 2>/dev/null || true
+fi
 rm -f "${SYSTEMD_DIR}/usbypass-clear-sudo.service"
+rm -f "${SYSTEMD_DIR}/usbypass-verify@.service"
+rm -f "${SYSTEMD_DIR}/usbypass-verify-boot.service"
 command -v systemctl >/dev/null && systemctl daemon-reload || true
 
 # 3. Remove shim scripts.
