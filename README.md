@@ -1,4 +1,5 @@
 # USBYPASS
+<img width="1024" height="559" alt="image" src="https://github.com/user-attachments/assets/91dfbdb5-f7f7-4f00-99da-61f9439980c3" />
 
 > Use a physical USB drive as a password-bypass key for Linux `sudo` and
 > login, with standard password entry always available as a fallback.
